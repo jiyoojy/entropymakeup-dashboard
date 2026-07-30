@@ -34,10 +34,22 @@
   .sidebar.collapsed { margin-left:calc(-1 * var(--sidebar-w)); }
   .sidebar .brand { padding:20px 18px 14px; font-weight:700; font-size:15px; border-bottom:1px solid var(--line); }
   .sidebar .brand small { display:block; font-weight:400; color:var(--sub); font-size:11px; margin-top:2px; }
-  .nav { padding:10px; flex:1; }
-  .nav button { width:100%; text-align:left; padding:10px 12px; border:none; background:none; border-radius:8px; font-size:13px; color:var(--ink); margin-bottom:2px; }
+  .nav { padding:10px; flex:1; overflow-y:auto; }
+  .nav-group-label { font-size:10.5px; font-weight:700; letter-spacing:.03em; color:var(--sub); text-transform:uppercase; padding:14px 12px 4px; }
+  .nav-group-label:first-child { padding-top:4px; }
+  .nav button { width:100%; text-align:left; padding:9px 12px; border:none; background:none; border-radius:8px; font-size:13px; color:var(--ink); margin-bottom:1px; }
   .nav button:hover { background:var(--bg); }
   .nav button.active { background:var(--accent-soft); color:var(--accent-dark); font-weight:600; }
+  .nav button.soon { color:var(--sub); }
+  .soon-page { padding:40px 20px; text-align:center; color:var(--sub); }
+  .soon-page .icon { font-size:34px; margin-bottom:10px; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-head { text-align:center; font-size:11px; color:var(--sub); font-weight:600; padding:4px 0; }
+  .cal-cell { min-height:64px; border:1px solid var(--line); border-radius:6px; padding:4px; font-size:11px; }
+  .cal-cell.empty { border:none; }
+  .cal-daynum { font-size:11px; color:var(--sub); margin-bottom:2px; }
+  .cal-item { background:var(--accent-soft); color:var(--accent-dark); border-radius:4px; padding:1px 4px; margin-bottom:2px; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cal-more { font-size:10px; color:var(--sub); }
   .sidebar .userbox { padding:14px 18px; border-top:1px solid var(--line); font-size:11.5px; color:var(--sub); }
   .sidebar .userbox a { color:var(--accent-dark); cursor:pointer; text-decoration:underline; }
 
@@ -127,11 +139,34 @@
   <div class="sidebar" id="sidebar">
     <div class="brand">엔트로피 대시보드<small>Entropy Makeup · Morandipark</small></div>
     <div class="nav">
-      <button data-tab="overview" class="active">🔥 개요</button>
-      <button data-tab="seeding">🌱 시딩 파이프라인</button>
-      <button data-tab="revenue">💰 매출 이력</button>
-      <button data-tab="organic">📸 오가닉 콘텐츠</button>
-      <button data-tab="campaigns">🚀 캠페인 리포트</button>
+      <div class="nav-group-label">메인</div>
+      <button data-tab="overview" data-title="대시보드" class="active">📊 대시보드</button>
+
+      <div class="nav-group-label">인플루언서 (마켓)</div>
+      <button data-tab="seeding" data-title="인플루언서 관리">📋 인플루언서 관리</button>
+      <button data-tab="revenue" data-title="매출 이력">💰 매출 이력</button>
+      <button data-tab="agency-analysis" data-title="진행자별 분석">🔧 진행자별 분석</button>
+      <button data-tab="brand-analysis" data-title="브랜드별 분석">🔖 브랜드별 분석</button>
+
+      <div class="nav-group-label">컨텐츠 협업</div>
+      <button data-tab="campaigns" data-title="협업 캠페인">📺 협업 캠페인</button>
+      <button data-tab="collab-contacts" data-title="협업 컨택 리스트" class="soon">🍯 협업 컨택 리스트</button>
+      <button data-tab="domestic-collab" data-title="국내 협업 현황" class="soon">🇰🇷 국내 협업 현황</button>
+
+      <div class="nav-group-label">일정</div>
+      <button data-tab="calendar" data-title="공동구매 캘린더">📅 공동구매 캘린더</button>
+
+      <div class="nav-group-label">성과</div>
+      <button data-tab="kpi" data-title="담당자 KPI">👤 담당자 KPI</button>
+
+      <div class="nav-group-label">관리</div>
+      <button data-tab="raw" data-title="Raw 데이터">📁 Raw 데이터</button>
+
+      <div class="nav-group-label">카카오톡</div>
+      <button data-tab="kakao" data-title="카톡플친 집행내역" class="soon">💬 카톡플친 집행내역</button>
+
+      <div class="nav-group-label">오가닉 콘텐츠</div>
+      <button data-tab="organic" data-title="오가닉 컨텐츠 트래킹">🌱 오가닉 컨텐츠 트래킹</button>
     </div>
     <div class="userbox">
       <div id="userEmail"></div>
@@ -232,7 +267,7 @@ document.querySelectorAll('.nav button').forEach(btn => {
     document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     activeTab = btn.dataset.tab;
-    document.getElementById('pageTitle').textContent = btn.textContent.replace(/^\S+\s/, '');
+    document.getElementById('pageTitle').textContent = btn.dataset.title || btn.textContent.replace(/^\S+\s/, '');
     render();
   };
 });
@@ -273,6 +308,14 @@ function render() {
   else if (activeTab === 'revenue') renderRevenue();
   else if (activeTab === 'organic') renderOrganic();
   else if (activeTab === 'campaigns') renderCampaigns();
+  else if (activeTab === 'agency-analysis') renderAgencyAnalysis();
+  else if (activeTab === 'brand-analysis') renderBrandAnalysis();
+  else if (activeTab === 'calendar') renderCalendar();
+  else if (activeTab === 'kpi') renderKpi();
+  else if (activeTab === 'raw') renderRaw();
+  else if (activeTab === 'collab-contacts') renderSoon('🍯', '협업 컨택 리스트', '마켓 시딩과 별도로 진행되는 콘텐츠 협업 컨택 데이터가 연결되면 이 화면에 표시돼요.');
+  else if (activeTab === 'domestic-collab') renderSoon('🇰🇷', '국내 협업 현황', '국내 협업 현황을 관리 중인 시트를 알려주시면 다음 화면으로 추가해드릴게요.');
+  else if (activeTab === 'kakao') renderSoon('💬', '카톡플친 집행내역', '카카오톡 플러스친구 집행내역 시트를 공유해주시면 이 화면에 연결해드릴게요.');
 }
 
 // ---------------- OVERVIEW ----------------
@@ -331,6 +374,260 @@ function renderOverview() {
     data:{ labels: agencySorted.map(a=>a[0]), datasets:[{ data: agencySorted.map(a=>a[1]), backgroundColor:'#c98a92', borderRadius:5 }] },
     options:{ indexAxis:'y', plugins:{legend:{display:false}, title:{display:true,text:'파트너별 누적 매출'}}, scales:{x:{ticks:{callback:v=>(v/1e6).toFixed(0)+'백만'}}} }
   });
+}
+
+// ---------------- SOON PLACEHOLDER ----------------
+function renderSoon(icon, title, desc) {
+  document.getElementById('content').innerHTML = `
+    <div class="panel soon-page">
+      <div class="icon">${icon}</div>
+      <h3 style="margin:0 0 8px;">${esc(title)} 준비중</h3>
+      <p class="muted" style="max-width:420px; margin:0 auto;">${esc(desc)}</p>
+    </div>
+  `;
+}
+
+// ---------------- 진행자별 분석 (에이전시) ----------------
+function renderAgencyAnalysis() {
+  const byAgency = {};
+  ROUNDS.forEach(r => {
+    const key = r.agency || '미지정';
+    if (!byAgency[key]) byAgency[key] = { rounds:0, revenue:0, lastDate:null };
+    byAgency[key].rounds += 1;
+    byAgency[key].revenue += Number(r.revenue) || 0;
+    if (r.start_date && (!byAgency[key].lastDate || r.start_date > byAgency[key].lastDate)) byAgency[key].lastDate = r.start_date;
+  });
+  const rows = Object.entries(byAgency).map(([agency, v]) => ({ agency, ...v, avg: v.rounds ? v.revenue / v.rounds : 0 }))
+    .sort((a,b) => b.revenue - a.revenue);
+
+  document.getElementById('content').innerHTML = `
+    <p class="muted" style="margin-top:-6px;">공동구매 매출 이력을 진행자(파트너·에이전시) 기준으로 집계했어요.</p>
+    <div class="grid-2">
+      <div class="panel"><canvas id="agencyAnalysisChart"></canvas></div>
+      <div class="panel">
+        <h3 style="margin-top:0;font-size:14px;">요약</h3>
+        <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);">
+          <div class="kpi-card"><div class="label">활동 진행자 수</div><div class="value">${rows.length}</div></div>
+          <div class="kpi-card"><div class="label">누적 매출</div><div class="value" style="font-size:16px;">${won(rows.reduce((a,r)=>a+r.revenue,0))}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;font-size:14px;">진행자별 상세</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>진행자</th><th>진행 회차</th><th>누적 매출</th><th>회차당 평균</th><th>최근 진행일</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${esc(r.agency)}</td>
+                <td class="num">${r.rounds}회</td>
+                <td class="num">${won(r.revenue)}</td>
+                <td class="num">${won(r.avg)}</td>
+                <td class="muted">${r.lastDate||'-'}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="5" class="muted">데이터가 없습니다.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  const top = rows.slice(0, 12);
+  new Chart(document.getElementById('agencyAnalysisChart'), {
+    type: 'bar',
+    data: { labels: top.map(r=>r.agency), datasets: [{ data: top.map(r=>r.revenue), backgroundColor:'#c98a92', borderRadius:5 }] },
+    options: { indexAxis:'y', plugins:{legend:{display:false}, title:{display:true,text:'진행자별 누적 매출'}}, scales:{x:{ticks:{callback:v=>(v/1e6).toFixed(0)+'백만'}}} }
+  });
+}
+
+// ---------------- 브랜드별 분석 ----------------
+function renderBrandAnalysis() {
+  const contactIdToBrand = {};
+  CONTACTS.forEach(c => { contactIdToBrand[c.id] = c.brand || '미지정'; });
+  const byBrand = {};
+  CONTACTS.forEach(c => {
+    const key = c.brand || '미지정';
+    if (!byBrand[key]) byBrand[key] = { contacts:0, confirmed:0, revenue:0, rounds:0 };
+    byBrand[key].contacts += 1;
+    if (c.status === '진행 확정') byBrand[key].confirmed += 1;
+  });
+  ROUNDS.forEach(r => {
+    const brand = r.contact_id ? contactIdToBrand[r.contact_id] : null;
+    if (!brand) return;
+    if (!byBrand[brand]) byBrand[brand] = { contacts:0, confirmed:0, revenue:0, rounds:0 };
+    byBrand[brand].revenue += Number(r.revenue) || 0;
+    byBrand[brand].rounds += 1;
+  });
+  const rows = Object.entries(byBrand).map(([brand, v]) => ({ brand, ...v }))
+    .sort((a,b) => b.revenue - a.revenue || b.contacts - a.contacts);
+
+  document.getElementById('content').innerHTML = `
+    <p class="muted" style="margin-top:-6px;">시딩 컨택과 공동구매 매출을 브랜드 기준으로 집계했어요.</p>
+    <div class="panel"><canvas id="brandAnalysisChart"></canvas></div>
+    <div class="panel">
+      <h3 style="margin-top:0;font-size:14px;">브랜드별 상세</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>브랜드</th><th>시딩 컨택</th><th>진행 확정</th><th>연결된 매출 회차</th><th>누적 매출</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${esc(r.brand)}</td>
+                <td class="num">${r.contacts}건</td>
+                <td class="num">${r.confirmed}건</td>
+                <td class="num">${r.rounds}회</td>
+                <td class="num">${won(r.revenue)}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="5" class="muted">데이터가 없습니다.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  new Chart(document.getElementById('brandAnalysisChart'), {
+    type: 'bar',
+    data: { labels: rows.map(r=>r.brand), datasets: [{ data: rows.map(r=>r.contacts), backgroundColor:'#7c96b8', borderRadius:5 }] },
+    options: { plugins:{legend:{display:false}, title:{display:true,text:'브랜드별 시딩 컨택 건수'}}, scales:{y:{beginAtZero:true,ticks:{stepSize:1}}} }
+  });
+}
+
+// ---------------- 공동구매 캘린더 ----------------
+let calMonth = new Date();
+function renderCalendar() {
+  document.getElementById('content').innerHTML = `
+    <div class="controls">
+      <button class="btn ghost" id="calPrev">◀</button>
+      <strong id="calLabel" style="font-size:14px;"></strong>
+      <button class="btn ghost" id="calNext">▶</button>
+      <button class="btn ghost" id="calToday">오늘</button>
+    </div>
+    <div class="panel"><div id="calGrid"></div></div>
+    <div class="panel">
+      <h3 style="margin-top:0;font-size:14px;">이번 달 진행 회차</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>시작일</th><th>종료일</th><th>진행자</th><th>제품</th><th>매출</th></tr></thead>
+        <tbody id="calList"></tbody>
+      </table></div>
+    </div>
+  `;
+  document.getElementById('calPrev').onclick = () => { calMonth.setMonth(calMonth.getMonth()-1); renderCalendarBody(); };
+  document.getElementById('calNext').onclick = () => { calMonth.setMonth(calMonth.getMonth()+1); renderCalendarBody(); };
+  document.getElementById('calToday').onclick = () => { calMonth = new Date(); renderCalendarBody(); };
+  renderCalendarBody();
+}
+function renderCalendarBody() {
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  document.getElementById('calLabel').textContent = `${y}년 ${m+1}월`;
+  const firstDay = new Date(y, m, 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const byDate = {};
+  ROUNDS.forEach(r => {
+    if (!r.start_date) return;
+    if (!byDate[r.start_date]) byDate[r.start_date] = [];
+    byDate[r.start_date].push(r);
+  });
+  let cells = '';
+  ['일','월','화','수','목','금','토'].forEach(d => cells += `<div class="cal-head">${d}</div>`);
+  for (let i=0; i<startOffset; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let d=1; d<=daysInMonth; d++) {
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const items = byDate[dateStr] || [];
+    cells += `<div class="cal-cell"><div class="cal-daynum">${d}</div>${items.slice(0,2).map(r=>`<div class="cal-item">${esc(r.agency)}</div>`).join('')}${items.length>2?`<div class="cal-more">+${items.length-2}</div>`:''}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML = `<div class="cal-grid">${cells}</div>`;
+
+  const monthRounds = ROUNDS.filter(r => r.start_date && r.start_date.slice(0,7) === `${y}-${String(m+1).padStart(2,'0')}`)
+    .sort((a,b) => (a.start_date||'') < (b.start_date||'') ? -1 : 1);
+  document.getElementById('calList').innerHTML = monthRounds.map(r => `
+    <tr><td>${r.start_date||'-'}</td><td>${r.end_date||'-'}</td><td>${esc(r.agency)}</td><td>${esc(r.product)||'-'}</td><td class="num">${won(r.revenue)}</td></tr>
+  `).join('') || '<tr><td colspan="5" class="muted">이번 달 진행 회차가 없습니다.</td></tr>';
+}
+
+// ---------------- 담당자 KPI ----------------
+function renderKpi() {
+  const byAssignee = {};
+  CONTACTS.forEach(c => {
+    const key = c.assignee || '미지정';
+    if (!byAssignee[key]) byAssignee[key] = { contacts:0, confirmed:0, revenue:0, campaigns:0 };
+    byAssignee[key].contacts += 1;
+    if (c.status === '진행 확정') byAssignee[key].confirmed += 1;
+  });
+  const contactIdToAssignee = {};
+  CONTACTS.forEach(c => { contactIdToAssignee[c.id] = c.assignee || '미지정'; });
+  ROUNDS.forEach(r => {
+    if (!r.contact_id) return;
+    const key = contactIdToAssignee[r.contact_id];
+    if (!key) return;
+    if (!byAssignee[key]) byAssignee[key] = { contacts:0, confirmed:0, revenue:0, campaigns:0 };
+    byAssignee[key].revenue += Number(r.revenue) || 0;
+  });
+  CAMPAIGNS.forEach(c => {
+    const key = c.assignee || '미지정';
+    if (!byAssignee[key]) byAssignee[key] = { contacts:0, confirmed:0, revenue:0, campaigns:0 };
+    byAssignee[key].campaigns += 1;
+  });
+  const rows = Object.entries(byAssignee).filter(([k])=>k!=='미지정' || true).map(([assignee, v]) => ({ assignee, ...v }))
+    .sort((a,b) => b.revenue - a.revenue || b.contacts - a.contacts);
+
+  document.getElementById('content').innerHTML = `
+    <p class="muted" style="margin-top:-6px;">시딩 컨택·매출·캠페인 데이터를 담당자 기준으로 집계했어요.</p>
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>담당자</th><th>시딩 컨택</th><th>진행 확정</th><th>전환율</th><th>연결 매출</th><th>운영 캠페인</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${esc(r.assignee)}</td>
+                <td class="num">${r.contacts}건</td>
+                <td class="num">${r.confirmed}건</td>
+                <td class="num">${r.contacts ? Math.round(r.confirmed/r.contacts*100)+'%' : '-'}</td>
+                <td class="num">${won(r.revenue)}</td>
+                <td class="num">${r.campaigns}건</td>
+              </tr>
+            `).join('') || '<tr><td colspan="6" class="muted">데이터가 없습니다.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ---------------- Raw 데이터 ----------------
+const RAW_TABLES = {
+  contacts: { label: '시딩 컨택 (contacts)', data: () => CONTACTS },
+  group_buy_rounds: { label: '공동구매 매출 이력 (group_buy_rounds)', data: () => ROUNDS },
+  organic_content_mentions: { label: '오가닉 콘텐츠 (organic_content_mentions)', data: () => ORGANIC },
+  campaigns: { label: '캠페인 (campaigns)', data: () => CAMPAIGNS },
+  campaign_collabs: { label: '캠페인 협업 리스트 (campaign_collabs)', data: () => CAMPAIGN_COLLABS },
+  campaign_improvements: { label: '캠페인 보강 포인트 (campaign_improvements)', data: () => CAMPAIGN_IMPROVEMENTS },
+};
+let rawTable = 'contacts';
+function renderRaw() {
+  document.getElementById('content').innerHTML = `
+    <div class="controls">
+      <select id="rawTableSelect">${Object.entries(RAW_TABLES).map(([k,v])=>`<option value="${k}" ${k===rawTable?'selected':''}>${esc(v.label)}</option>`).join('')}</select>
+      <span class="muted" id="rawCount"></span>
+    </div>
+    <div class="panel"><div class="table-wrap" id="rawTableWrap"></div></div>
+  `;
+  document.getElementById('rawTableSelect').onchange = e => { rawTable = e.target.value; renderRawTable(); };
+  renderRawTable();
+}
+function renderRawTable() {
+  const rows = RAW_TABLES[rawTable].data();
+  document.getElementById('rawCount').textContent = `총 ${rows.length}건`;
+  if (!rows.length) { document.getElementById('rawTableWrap').innerHTML = '<p class="muted">데이터가 없습니다.</p>'; return; }
+  const cols = Object.keys(rows[0]).filter(k => !k.startsWith('_'));
+  document.getElementById('rawTableWrap').innerHTML = `
+    <table>
+      <thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>${cols.map(c=>`<td class="muted" style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(r[c])}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
 // ---------------- SEEDING TAB ----------------
