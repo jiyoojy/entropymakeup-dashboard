@@ -682,20 +682,41 @@ async function deleteOrganic(id) {
 }
 
 
-// ---------------- CAMPAIGN REPORTS TAB (읽기 전용 - 구글시트에서 관리) ----------------
+// ---------------- CAMPAIGN REPORTS TAB ----------------
 let selectedCampaignRef = null;
 function renderCampaigns() {
   if (!selectedCampaignRef && CAMPAIGNS.length) selectedCampaignRef = CAMPAIGNS[0].sheet_ref;
+  const totalPeople = new Set(CAMPAIGN_COLLABS.map(x=>x.account_name).filter(Boolean)).size;
+  const lastSync = CAMPAIGN_COLLABS.concat(CAMPAIGNS).reduce((max,x)=>{
+    const t = x.updated_at ? new Date(x.updated_at) : null;
+    return (t && (!max || t>max)) ? t : max;
+  }, null);
+  const lastSyncStr = lastSync ? lastSync.toLocaleString('ko-KR') : '-';
+
   document.getElementById('content').innerHTML = `
-    <p class="muted" style="margin-top:-6px;">이 데이터는 구글시트에서 관리되며 자동동기화됩니다 (읽기 전용).</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+      <div>
+        <h2 style="margin:0 0 4px; font-size:17px;">컨텐츠 협업 캠페인</h2>
+        <p class="muted" style="margin:0;">마켓 진행자와는 별도로 진행된 콘텐츠 협업 캠페인을 관리하세요.</p>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn ghost" id="refreshBtn4">🔄 새로고침</button>
+        <button class="btn primary" id="addCampaignBtn">＋ 신규 등록</button>
+      </div>
+    </div>
+    <p style="font-size:12px; color:var(--sub); margin:10px 0 16px;">
+      <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--ok); margin-right:5px;"></span>
+      총 ${totalPeople}명 · ${lastSyncStr} 기준
+    </p>
     <div class="controls">
       <select id="fCampaign">${CAMPAIGNS.map(c=>`<option value="${esc(c.sheet_ref)}" ${selectedCampaignRef===c.sheet_ref?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
-      <button class="btn ghost" id="refreshBtn4">🔄 새로고침</button>
+      <span class="muted">총 ${CAMPAIGNS.length}개 캠페인 · 협업 ${CAMPAIGN_COLLABS.length}건</span>
     </div>
     <div id="campaignDetail"></div>
   `;
   document.getElementById('fCampaign').onchange = e => { selectedCampaignRef = e.target.value; renderCampaignDetail(); };
   document.getElementById('refreshBtn4').onclick = loadData;
+  document.getElementById('addCampaignBtn').onclick = () => toast('신규 캠페인은 구글시트에 탭을 추가해서 만들어주세요 (자동으로 감지됩니다).');
   renderCampaignDetail();
 }
 function renderCampaignDetail() {
@@ -705,44 +726,45 @@ function renderCampaignDetail() {
   const collabs = CAMPAIGN_COLLABS.filter(x=>x.campaign_sheet_ref===c.sheet_ref).sort((a,b)=>Number(a.no)-Number(b.no));
   const improvements = CAMPAIGN_IMPROVEMENTS.filter(x=>x.campaign_sheet_ref===c.sheet_ref).sort((a,b)=>Number(a.no)-Number(b.no));
   const kpis = [
-    {label:'목표 VIEW', value: c.target_view!=null ? Number(c.target_view).toLocaleString('ko-KR') : '-'},
+    {label:'목표 VIEW', value: c.target_view!=null ? Number(c.target_view).toLocaleString('ko-KR') : '-', hi:true},
     {label:'도달 VIEW', value: c.reached_view!=null ? Number(c.reached_view).toLocaleString('ko-KR') : '-'},
     {label:'달성률', value: c.achievement_rate || '-'},
     {label:'총 매출', value: won(c.total_revenue)},
     {label:'업로드 효과', value: c.upload_effect || '-'},
   ];
   box.innerHTML = `
-    <div class="panel" style="margin-top:14px;">
-      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;">
-        <div><strong>${esc(c.name)}</strong> <span class="muted">· ${esc(c.date_range||'')}</span></div>
-        <div class="muted">담당자: ${esc(c.assignee)||'-'}</div>
-      </div>
-      <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr); margin-bottom:0;">
-        ${kpis.map(k=>`<div class="kpi-card"><div class="label">${k.label}</div><div class="value" style="font-size:16px;">${k.value}</div></div>`).join('')}
-      </div>
+    <div style="margin:14px 0 10px; color:var(--sub); font-size:12.5px;">담당자: <strong style="color:var(--ink);">${esc(c.assignee)||'-'}</strong></div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr); margin-bottom:20px;">
+      ${kpis.map(k=>`<div class="kpi-card" style="${k.hi?'background:var(--accent-dark); border-color:var(--accent-dark);':''}">
+        <div class="label" style="${k.hi?'color:#f3dde0;':''}">${k.label}</div>
+        <div class="value" style="${k.hi?'color:#fff;':''}">${k.value}</div>
+      </div>`).join('')}
     </div>
     <div class="panel">
-      <h3 style="margin-top:0;font-size:14px;">협업 리스트 (${collabs.length}건)</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="margin:0;font-size:14px;">협업 리스트 (${collabs.length}건)</h3>
+        <button class="btn primary small" onclick="openCollabModal(null, '${c.sheet_ref}')">＋ 협업자 추가</button>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>No</th><th>채널</th><th>계정명</th><th>구분</th><th>노출제품</th><th>협업형태</th><th>업로드일</th><th>조회수</th><th>인게이지율</th><th>섭외상태</th><th>담당자 코멘트</th><th>링크</th></tr></thead>
+          <thead><tr><th>채널</th><th>계정명</th><th>구분/노출제품</th><th>콘텐츠 유형</th><th>협업형태</th><th>업로드일</th><th>조회수</th><th>섭외상태</th><th>담당자 코멘트</th><th></th></tr></thead>
           <tbody>
             ${collabs.map(x => `
               <tr>
-                <td>${esc(x.no)}</td>
                 <td>${esc(x.channel)||'-'}</td>
                 <td>${esc(x.account_name)||'-'}</td>
-                <td>${esc(x.category)||'-'}</td>
-                <td class="muted" style="max-width:220px;">${esc(x.exposed_product)||'-'}</td>
+                <td class="muted" style="max-width:260px;">${esc(x.category)||''}${x.category&&x.exposed_product?' · ':''}${esc(x.exposed_product)||''}</td>
+                <td>${esc(x.content_type)||'-'}</td>
                 <td>${esc(x.collab_type)||'-'}</td>
                 <td class="muted">${x.upload_date||'-'}</td>
                 <td class="num">${x.views!=null?Number(x.views).toLocaleString('ko-KR'):'-'}</td>
-                <td class="num">${esc(x.engagement_rate)||'-'}</td>
                 <td>${esc(x.recruit_status)||'-'}</td>
                 <td class="muted" style="max-width:260px;">${esc(x.manager_comment)||'-'}</td>
-                <td>${x.content_link?`<a href="${esc(x.content_link)}" target="_blank" rel="noopener">링크</a>`:'-'}</td>
+                <td class="row-actions">
+                  <button class="btn small" onclick="openCollabModal('${x.id}', '${c.sheet_ref}')">수정</button>
+                </td>
               </tr>
-            `).join('') || '<tr><td colspan="12" class="muted">데이터가 없습니다.</td></tr>'}
+            `).join('') || '<tr><td colspan="10" class="muted">데이터가 없습니다.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -766,6 +788,76 @@ function renderCampaignDetail() {
       </div>
     </div>
   `;
+}
+
+function openCollabModal(id, campaignSheetRef) {
+  const x = id ? CAMPAIGN_COLLABS.find(r=>r.id===id) : {};
+  const campaign = CAMPAIGNS.find(c=>c.sheet_ref===campaignSheetRef);
+  document.getElementById('modalBody').innerHTML = `
+    <h3>${id ? '협업 정보 수정' : '신규 협업자 추가'} <span class="muted" style="font-size:12px;">(${esc(campaign ? campaign.name : '')})</span></h3>
+    <div class="field-row">
+      <div class="field"><label>채널</label><input id="m_ccChannel" value="${esc(x.channel)}" placeholder="Instagram"></div>
+      <div class="field"><label>계정명 *</label><input id="m_ccAccount" value="${esc(x.account_name)}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>구분</label><input id="m_ccCategory" value="${esc(x.category)}"></div>
+      <div class="field"><label>노출 제품</label><input id="m_ccProduct" value="${esc(x.exposed_product)}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>콘텐츠 유형</label><input id="m_ccContentType" value="${esc(x.content_type)}" placeholder="릴스"></div>
+      <div class="field"><label>협업 형태</label><input id="m_ccCollabType" value="${esc(x.collab_type)}" placeholder="MAIN / SUB"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>업로드일</label><input type="date" id="m_ccUploadDate" value="${x.upload_date||''}"></div>
+      <div class="field"><label>조회수</label><input type="number" id="m_ccViews" value="${x.views??''}"></div>
+    </div>
+    <div class="field"><label>콘텐츠 링크</label><input id="m_ccLink" value="${esc(x.content_link)}"></div>
+    <div class="field-row">
+      <div class="field"><label>섭외상태</label><input id="m_ccStatus" value="${esc(x.recruit_status)}" placeholder="완료"></div>
+      <div class="field"><label>자동DM</label><input id="m_ccAutoDm" value="${esc(x.auto_dm)}" placeholder="O / X"></div>
+    </div>
+    <div class="field"><label>담당자 코멘트</label><textarea id="m_ccComment">${esc(x.manager_comment)}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="saveCollab(${id?`'${id}'`:'null'}, '${campaignSheetRef}')">저장</button>
+    </div>
+  `;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+async function saveCollab(id, campaignSheetRef) {
+  const accountName = document.getElementById('m_ccAccount').value.trim();
+  if (!accountName) { toast('계정명은 필수예요.'); return; }
+  const numOrNull = v => v === '' ? null : Number(v);
+  const payload = {
+    channel: document.getElementById('m_ccChannel').value.trim() || null,
+    account_name: accountName,
+    category: document.getElementById('m_ccCategory').value.trim() || null,
+    exposed_product: document.getElementById('m_ccProduct').value.trim() || null,
+    content_type: document.getElementById('m_ccContentType').value.trim() || null,
+    collab_type: document.getElementById('m_ccCollabType').value.trim() || null,
+    upload_date: document.getElementById('m_ccUploadDate').value || null,
+    views: numOrNull(document.getElementById('m_ccViews').value),
+    content_link: document.getElementById('m_ccLink').value.trim() || null,
+    recruit_status: document.getElementById('m_ccStatus').value.trim() || null,
+    auto_dm: document.getElementById('m_ccAutoDm').value.trim() || null,
+    manager_comment: document.getElementById('m_ccComment').value.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  let res;
+  if (id) {
+    res = await sb.from('campaign_collabs').update(payload).eq('id', id);
+  } else {
+    const existing = CAMPAIGN_COLLABS.filter(x=>x.campaign_sheet_ref===campaignSheetRef);
+    const nextNo = existing.reduce((m,x)=>Math.max(m, Number(x.no)||0), 0) + 1;
+    payload.campaign_sheet_ref = campaignSheetRef;
+    const camp = CAMPAIGNS.find(c=>c.sheet_ref===campaignSheetRef);
+    payload.campaign_name = camp ? camp.name : null;
+    payload.no = String(nextNo);
+    payload.sheet_ref = campaignSheetRef + ':manual:' + Date.now();
+    res = await sb.from('campaign_collabs').insert(payload);
+  }
+  if (res.error) { toast('저장 실패: ' + res.error.message); return; }
+  closeModal(); toast('저장했어요.'); await loadData();
 }
 
 function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
