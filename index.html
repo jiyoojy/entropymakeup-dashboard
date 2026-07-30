@@ -130,6 +130,7 @@
       <button data-tab="overview" class="active">🔥 개요</button>
       <button data-tab="seeding">🌱 시딩 파이프라인</button>
       <button data-tab="revenue">💰 매출 이력</button>
+      <button data-tab="organic">📸 오가닉 콘텐츠</button>
     </div>
     <div class="userbox">
       <div id="userEmail"></div>
@@ -162,6 +163,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let CONTACTS = [];
 let ROUNDS = [];
+let ORGANIC = [];
 let activeTab = 'overview';
 
 function toast(msg) {
@@ -234,14 +236,17 @@ document.querySelectorAll('.nav button').forEach(btn => {
 // ---------------- DATA ----------------
 async function loadData() {
   document.getElementById('content').innerHTML = '<div class="loading-note">불러오는 중…</div>';
-  const [c, r] = await Promise.all([
+  const [c, r, o] = await Promise.all([
     sb.from('contacts').select('*').order('created_at', { ascending:false }),
     sb.from('group_buy_rounds').select('*').order('start_date', { ascending:false }),
+    sb.from('organic_content_mentions').select('*').order('mention_date', { ascending:false }),
   ]);
   if (c.error) { toast('contacts 로드 실패: ' + c.error.message); }
   if (r.error) { toast('group_buy_rounds 로드 실패: ' + r.error.message); }
+  if (o.error) { toast('organic_content_mentions 로드 실패: ' + o.error.message); }
   CONTACTS = c.data || [];
   ROUNDS = r.data || [];
+  ORGANIC = o.data || [];
   const today = new Date();
   ROUNDS.forEach(r => {
     r._start = r.start_date ? new Date(r.start_date) : null;
@@ -255,6 +260,7 @@ function render() {
   if (activeTab === 'overview') renderOverview();
   else if (activeTab === 'seeding') renderSeeding();
   else if (activeTab === 'revenue') renderRevenue();
+  else if (activeTab === 'organic') renderOrganic();
 }
 
 // ---------------- OVERVIEW ----------------
@@ -554,6 +560,111 @@ async function saveRound(id) {
 async function deleteRound(id) {
   if (!confirm('이 회차를 삭제할까요?')) return;
   const res = await sb.from('group_buy_rounds').delete().eq('id', id);
+  if (res.error) { toast('삭제 실패: ' + res.error.message); return; }
+  toast('삭제했어요.'); await loadData();
+}
+
+
+// ---------------- ORGANIC CONTENT TAB ----------------
+let organicFilters = { channel:'', utilized:'', q:'' };
+function renderOrganic() {
+  const channels = [...new Set(ORGANIC.map(o=>o.channel).filter(Boolean))];
+  const utilizedVals = [...new Set(ORGANIC.map(o=>o.utilized).filter(Boolean))];
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <div class="controls">
+        <select id="fChannel"><option value="">전체 채널</option>${channels.map(c=>`<option ${organicFilters.channel===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+        <select id="fUtilized"><option value="">전체 활용여부</option>${utilizedVals.map(u=>`<option ${organicFilters.utilized===u?'selected':''}>${esc(u)}</option>`).join('')}</select>
+        <input id="fOrganicSearch" placeholder="크리에이터·제품·내용 검색..." value="${esc(organicFilters.q)}">
+        <button class="btn ghost" id="refreshBtn3">🔄 새로고침</button>
+        <button class="btn primary" id="addOrganicBtn">＋ 신규 등록</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>채널</th><th>날짜</th><th>크리에이터명</th><th>언급 제품</th><th>주요 내용</th><th>링크</th><th>활용여부</th><th>비고</th><th></th></tr></thead>
+          <tbody id="organicTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  document.getElementById('fChannel').onchange = e => { organicFilters.channel = e.target.value; renderOrganicTable(); };
+  document.getElementById('fUtilized').onchange = e => { organicFilters.utilized = e.target.value; renderOrganicTable(); };
+  document.getElementById('fOrganicSearch').oninput = e => { organicFilters.q = e.target.value; renderOrganicTable(); };
+  document.getElementById('refreshBtn3').onclick = loadData;
+  document.getElementById('addOrganicBtn').onclick = () => openOrganicModal(null);
+  renderOrganicTable();
+}
+function renderOrganicTable() {
+  let rows = ORGANIC.filter(o => {
+    if (organicFilters.channel && o.channel !== organicFilters.channel) return false;
+    if (organicFilters.utilized && o.utilized !== organicFilters.utilized) return false;
+    if (organicFilters.q) {
+      const hay = [o.creator_name,o.product,o.content_summary,o.note].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(organicFilters.q.toLowerCase())) return false;
+    }
+    return true;
+  });
+  document.getElementById('organicTbody').innerHTML = rows.map(o => `
+    <tr>
+      <td>${esc(o.channel)||'-'}</td>
+      <td class="muted">${o.mention_date||'-'}</td>
+      <td>${esc(o.creator_name)}</td>
+      <td>${esc(o.product)||'-'}</td>
+      <td class="muted" style="max-width:280px;">${esc(o.content_summary)||'-'}</td>
+      <td>${o.content_link ? `<a href="${esc(o.content_link)}" target="_blank" rel="noopener">링크</a>` : '-'}</td>
+      <td>${esc(o.utilized)||'-'}</td>
+      <td class="muted">${esc(o.note)||'-'}</td>
+      <td class="row-actions">
+        <button class="btn small" onclick="openOrganicModal('${o.id}')">수정</button>
+        <button class="btn small" onclick="deleteOrganic('${o.id}')">삭제</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="9" class="muted">조건에 맞는 데이터가 없습니다.</td></tr>';
+}
+function openOrganicModal(id) {
+  const o = id ? ORGANIC.find(x=>x.id===id) : {};
+  document.getElementById('modalBody').innerHTML = `
+    <h3>${id ? '오가닉 콘텐츠 수정' : '신규 오가닉 콘텐츠 등록'}</h3>
+    <div class="field-row">
+      <div class="field"><label>채널 (IG/YT/X)</label><input id="m_channel2" value="${esc(o.channel)}"></div>
+      <div class="field"><label>날짜</label><input type="date" id="m_mdate" value="${o.mention_date||''}"></div>
+    </div>
+    <div class="field"><label>크리에이터명 *</label><input id="m_creator" value="${esc(o.creator_name)}"></div>
+    <div class="field"><label>언급 제품</label><input id="m_oproduct" value="${esc(o.product)}"></div>
+    <div class="field"><label>주요 내용</label><textarea id="m_osummary">${esc(o.content_summary)}</textarea></div>
+    <div class="field"><label>콘텐츠 링크</label><input id="m_olink" value="${esc(o.content_link)}"></div>
+    <div class="field-row">
+      <div class="field"><label>활용 여부</label><input id="m_outilized" value="${esc(o.utilized)}"></div>
+      <div class="field"><label>비고</label><input id="m_onote" value="${esc(o.note)}"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="saveOrganic(${id?`'${id}'`:'null'})">저장</button>
+    </div>
+  `;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+async function saveOrganic(id) {
+  const payload = {
+    channel: document.getElementById('m_channel2').value.trim() || null,
+    mention_date: document.getElementById('m_mdate').value || null,
+    creator_name: document.getElementById('m_creator').value.trim(),
+    product: document.getElementById('m_oproduct').value.trim() || null,
+    content_summary: document.getElementById('m_osummary').value.trim() || null,
+    content_link: document.getElementById('m_olink').value.trim() || null,
+    utilized: document.getElementById('m_outilized').value.trim() || null,
+    note: document.getElementById('m_onote').value.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  if (!payload.creator_name) { toast('크리에이터명은 필수예요.'); return; }
+  const res = id ? await sb.from('organic_content_mentions').update(payload).eq('id', id)
+                 : await sb.from('organic_content_mentions').insert(payload);
+  if (res.error) { toast('저장 실패: ' + res.error.message); return; }
+  closeModal(); toast('저장했어요.'); await loadData();
+}
+async function deleteOrganic(id) {
+  if (!confirm('이 콘텐츠 기록을 삭제할까요?')) return;
+  const res = await sb.from('organic_content_mentions').delete().eq('id', id);
   if (res.error) { toast('삭제 실패: ' + res.error.message); return; }
   toast('삭제했어요.'); await loadData();
 }
