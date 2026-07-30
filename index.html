@@ -150,7 +150,7 @@
 
       <div class="nav-group-label">컨텐츠 협업</div>
       <button data-tab="campaigns" data-title="협업 캠페인">📺 협업 캠페인</button>
-      <button data-tab="collab-contacts" data-title="협업 컨택 리스트" class="soon">🍯 협업 컨택 리스트</button>
+      <button data-tab="collab-contacts" data-title="협업 컨택 리스트">🍯 협업 컨택 리스트</button>
       <button data-tab="domestic-collab" data-title="국내 협업 현황" class="soon">🇰🇷 국내 협업 현황</button>
 
       <div class="nav-group-label">일정</div>
@@ -203,6 +203,7 @@ let ORGANIC = [];
 let CAMPAIGNS = [];
 let CAMPAIGN_COLLABS = [];
 let CAMPAIGN_IMPROVEMENTS = [];
+let COLLAB_PROPOSALS = [];
 let activeTab = 'overview';
 
 function toast(msg) {
@@ -275,24 +276,27 @@ document.querySelectorAll('.nav button').forEach(btn => {
 // ---------------- DATA ----------------
 async function loadData() {
   document.getElementById('content').innerHTML = '<div class="loading-note">불러오는 중…</div>';
-  const [c, r, o, cp, cc, ci] = await Promise.all([
+  const [c, r, o, cp, cc, ci, cpr] = await Promise.all([
     sb.from('contacts').select('*').order('created_at', { ascending:false }),
     sb.from('group_buy_rounds').select('*').order('start_date', { ascending:false }),
     sb.from('organic_content_mentions').select('*').order('mention_date', { ascending:false }),
     sb.from('campaigns').select('*').order('created_at', { ascending:false }),
     sb.from('campaign_collabs').select('*'),
     sb.from('campaign_improvements').select('*'),
+    sb.from('collab_proposals').select('*'),
   ]);
   if (c.error) { toast('contacts 로드 실패: ' + c.error.message); }
   if (r.error) { toast('group_buy_rounds 로드 실패: ' + r.error.message); }
   if (o.error) { toast('organic_content_mentions 로드 실패: ' + o.error.message); }
   if (cp.error) { toast('campaigns 로드 실패: ' + cp.error.message); }
+  if (cpr.error) { toast('collab_proposals 로드 실패: ' + cpr.error.message); }
   CONTACTS = c.data || [];
   ROUNDS = r.data || [];
   ORGANIC = o.data || [];
   CAMPAIGNS = cp.data || [];
   CAMPAIGN_COLLABS = cc.data || [];
   CAMPAIGN_IMPROVEMENTS = ci.data || [];
+  COLLAB_PROPOSALS = cpr.data || [];
   const today = new Date();
   ROUNDS.forEach(r => {
     r._start = r.start_date ? new Date(r.start_date) : null;
@@ -313,7 +317,7 @@ function render() {
   else if (activeTab === 'calendar') renderCalendar();
   else if (activeTab === 'kpi') renderKpi();
   else if (activeTab === 'raw') renderRaw();
-  else if (activeTab === 'collab-contacts') renderSoon('🍯', '협업 컨택 리스트', '마켓 시딩과 별도로 진행되는 콘텐츠 협업 컨택 데이터가 연결되면 이 화면에 표시돼요.');
+  else if (activeTab === 'collab-contacts') renderCollabProposals();
   else if (activeTab === 'domestic-collab') renderSoon('🇰🇷', '국내 협업 현황', '국내 협업 현황을 관리 중인 시트를 알려주시면 다음 화면으로 추가해드릴게요.');
   else if (activeTab === 'kakao') renderSoon('💬', '카톡플친 집행내역', '카카오톡 플러스친구 집행내역 시트를 공유해주시면 이 화면에 연결해드릴게요.');
 }
@@ -602,6 +606,7 @@ const RAW_TABLES = {
   campaigns: { label: '캠페인 (campaigns)', data: () => CAMPAIGNS },
   campaign_collabs: { label: '캠페인 협업 리스트 (campaign_collabs)', data: () => CAMPAIGN_COLLABS },
   campaign_improvements: { label: '캠페인 보강 포인트 (campaign_improvements)', data: () => CAMPAIGN_IMPROVEMENTS },
+  collab_proposals: { label: '협업 컨택 리스트 (collab_proposals)', data: () => COLLAB_PROPOSALS },
 };
 let rawTable = 'contacts';
 function renderRaw() {
@@ -978,6 +983,147 @@ async function deleteOrganic(id) {
   toast('삭제했어요.'); await loadData();
 }
 
+
+// ---------------- 협업 컨택 리스트 (협업/협찬 제안) ----------------
+let proposalFilters = { sheet:'', paidType:'', progress:'', q:'' };
+function renderCollabProposals() {
+  const sheets = [...new Set(COLLAB_PROPOSALS.map(p=>p.source_sheet).filter(Boolean))];
+  const paidTypes = [...new Set(COLLAB_PROPOSALS.map(p=>p.paid_type).filter(Boolean))];
+  const progresses = [...new Set(COLLAB_PROPOSALS.map(p=>p.progress).filter(Boolean))];
+  document.getElementById('content').innerHTML = `
+    <p class="muted" style="margin-top:-6px;">마켓 시딩과 별도로 진행되는 콘텐츠 협업·협찬 제안을 제품/캠페인 탭 단위로 관리해요.</p>
+    <div class="panel">
+      <div class="controls">
+        <select id="fPSheet"><option value="">전체 캠페인/제품</option>${sheets.map(s=>`<option ${proposalFilters.sheet===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+        <select id="fPPaid"><option value="">전체 유가/무가</option>${paidTypes.map(t=>`<option ${proposalFilters.paidType===t?'selected':''}>${esc(t)}</option>`).join('')}</select>
+        <select id="fPProgress"><option value="">전체 진행사항</option>${progresses.map(p=>`<option ${proposalFilters.progress===p?'selected':''}>${esc(p)}</option>`).join('')}</select>
+        <input id="fPSearch" placeholder="계정·컨택자·프로모션 검색..." value="${esc(proposalFilters.q)}">
+        <button class="btn ghost" id="refreshBtnP">🔄 새로고침</button>
+        <button class="btn primary" id="addProposalBtn">＋ 신규 등록</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>캠페인/제품</th><th>No</th><th>진행</th><th>유가/무가</th><th>채널</th><th>카테고리</th><th>유형</th><th>진행사항</th><th>프로모션</th><th>컨택자</th><th>계정</th><th>단가</th><th></th></tr></thead>
+          <tbody id="proposalTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  document.getElementById('fPSheet').onchange = e => { proposalFilters.sheet = e.target.value; renderProposalTable(); };
+  document.getElementById('fPPaid').onchange = e => { proposalFilters.paidType = e.target.value; renderProposalTable(); };
+  document.getElementById('fPProgress').onchange = e => { proposalFilters.progress = e.target.value; renderProposalTable(); };
+  document.getElementById('fPSearch').oninput = e => { proposalFilters.q = e.target.value; renderProposalTable(); };
+  document.getElementById('refreshBtnP').onclick = loadData;
+  document.getElementById('addProposalBtn').onclick = () => openProposalModal(null);
+  renderProposalTable();
+}
+function renderProposalTable() {
+  let rows = COLLAB_PROPOSALS.filter(p => {
+    if (proposalFilters.sheet && p.source_sheet !== proposalFilters.sheet) return false;
+    if (proposalFilters.paidType && p.paid_type !== proposalFilters.paidType) return false;
+    if (proposalFilters.progress && p.progress !== proposalFilters.progress) return false;
+    if (proposalFilters.q) {
+      const hay = [p.account,p.contact_person,p.promotion,p.fee].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(proposalFilters.q.toLowerCase())) return false;
+    }
+    return true;
+  }).sort((a,b) => (a.source_sheet||'').localeCompare(b.source_sheet||'') || (Number(a.no)||0)-(Number(b.no)||0));
+  document.getElementById('proposalTbody').innerHTML = rows.map(p => `
+    <tr>
+      <td class="muted">${esc(p.source_sheet)}</td>
+      <td class="num">${esc(p.no)}</td>
+      <td>${p.in_progress ? '<span class="badge confirm">✓</span>' : '-'}</td>
+      <td>${esc(p.paid_type)||'-'}</td>
+      <td>${esc(p.channel)||'-'}</td>
+      <td>${esc(p.category)||'-'}</td>
+      <td>${esc(p.type)||'-'}</td>
+      <td>${esc(p.progress)||'-'}</td>
+      <td class="muted">${esc(p.promotion)||'-'}</td>
+      <td>${esc(p.contact_person)||'-'}</td>
+      <td>${p.account ? `<a href="${esc(p.account)}" target="_blank" rel="noopener">${esc(p.account).replace(/^https?:\/\/(www\.)?instagram\.com\//,'@')}</a>` : '-'}</td>
+      <td class="muted" style="max-width:220px;">${esc(p.fee)||'-'}</td>
+      <td class="row-actions">
+        <button class="btn small" onclick="openProposalModal('${p.id}')">수정</button>
+        <button class="btn small" onclick="deleteProposal('${p.id}')">삭제</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="13" class="muted">조건에 맞는 데이터가 없습니다.</td></tr>';
+}
+function openProposalModal(id) {
+  const p = id ? COLLAB_PROPOSALS.find(x=>x.id===id) : {};
+  const sheets = [...new Set(COLLAB_PROPOSALS.map(x=>x.source_sheet).filter(Boolean))];
+  document.getElementById('modalBody').innerHTML = `
+    <h3>${id ? '협업 제안 수정' : '신규 협업 제안 등록'}</h3>
+    <div class="field-row">
+      <div class="field"><label>캠페인/제품 탭 *</label>
+        <input id="m_pSheet" list="pSheetList" value="${esc(p.source_sheet)}" placeholder="예: 6월 올영세일">
+        <datalist id="pSheetList">${sheets.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+      </div>
+      <div class="field"><label>No.</label><input id="m_pNo" value="${esc(p.no)}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>진행 여부</label>
+        <select id="m_pInProgress"><option value="false" ${!p.in_progress?'selected':''}>미진행</option><option value="true" ${p.in_progress?'selected':''}>진행</option></select>
+      </div>
+      <div class="field"><label>유가/무가</label><input id="m_pPaid" value="${esc(p.paid_type)}" placeholder="유가 / 무가"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>채널</label><input id="m_pChannel" value="${esc(p.channel)}" placeholder="인스타그램"></div>
+      <div class="field"><label>카테고리</label><input id="m_pCategory" value="${esc(p.category)}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>유형</label><input id="m_pType" value="${esc(p.type)}" placeholder="릴스"></div>
+      <div class="field"><label>진행사항</label><input id="m_pProgress" value="${esc(p.progress)}" placeholder="컨택 전 / 컨택 중 / 회신 / 진행"></div>
+    </div>
+    <div class="field"><label>프로모션</label><input id="m_pPromotion" value="${esc(p.promotion)}"></div>
+    <div class="field-row">
+      <div class="field"><label>컨택자</label><input id="m_pContact" value="${esc(p.contact_person)}"></div>
+      <div class="field"><label>계정 링크</label><input id="m_pAccount" value="${esc(p.account)}"></div>
+    </div>
+    <div class="field"><label>단가/비용 메모</label><textarea id="m_pFee">${esc(p.fee)}</textarea></div>
+    <div class="field"><label>비고</label><input id="m_pNote" value="${esc(p.note)}"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">취소</button>
+      <button class="btn primary" onclick="saveProposal(${id?`'${id}'`:'null'})">저장</button>
+    </div>
+  `;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+async function saveProposal(id) {
+  const sourceSheet = document.getElementById('m_pSheet').value.trim();
+  if (!sourceSheet) { toast('캠페인/제품 탭은 필수예요.'); return; }
+  const payload = {
+    source_sheet: sourceSheet,
+    no: document.getElementById('m_pNo').value.trim() || null,
+    in_progress: document.getElementById('m_pInProgress').value === 'true',
+    paid_type: document.getElementById('m_pPaid').value.trim() || null,
+    channel: document.getElementById('m_pChannel').value.trim() || null,
+    category: document.getElementById('m_pCategory').value.trim() || null,
+    type: document.getElementById('m_pType').value.trim() || null,
+    progress: document.getElementById('m_pProgress').value.trim() || null,
+    promotion: document.getElementById('m_pPromotion').value.trim() || null,
+    contact_person: document.getElementById('m_pContact').value.trim() || null,
+    account: document.getElementById('m_pAccount').value.trim() || null,
+    fee: document.getElementById('m_pFee').value.trim() || null,
+    note: document.getElementById('m_pNote').value.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  let res;
+  if (id) {
+    res = await sb.from('collab_proposals').update(payload).eq('id', id);
+  } else {
+    payload.sheet_ref = 'manual:' + sourceSheet + ':' + Date.now();
+    res = await sb.from('collab_proposals').insert(payload);
+  }
+  if (res.error) { toast('저장 실패: ' + res.error.message); return; }
+  closeModal(); toast('저장했어요.'); await loadData();
+}
+async function deleteProposal(id) {
+  if (!confirm('이 협업 제안을 삭제할까요?')) return;
+  const res = await sb.from('collab_proposals').delete().eq('id', id);
+  if (res.error) { toast('삭제 실패: ' + res.error.message); return; }
+  toast('삭제했어요.'); await loadData();
+}
 
 // ---------------- CAMPAIGN REPORTS TAB ----------------
 let selectedCampaignRef = null;
