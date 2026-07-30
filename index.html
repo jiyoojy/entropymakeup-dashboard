@@ -131,6 +131,7 @@
       <button data-tab="seeding">🌱 시딩 파이프라인</button>
       <button data-tab="revenue">💰 매출 이력</button>
       <button data-tab="organic">📸 오가닉 콘텐츠</button>
+      <button data-tab="campaigns">🚀 캠페인 리포트</button>
     </div>
     <div class="userbox">
       <div id="userEmail"></div>
@@ -164,6 +165,9 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let CONTACTS = [];
 let ROUNDS = [];
 let ORGANIC = [];
+let CAMPAIGNS = [];
+let CAMPAIGN_COLLABS = [];
+let CAMPAIGN_IMPROVEMENTS = [];
 let activeTab = 'overview';
 
 function toast(msg) {
@@ -236,17 +240,24 @@ document.querySelectorAll('.nav button').forEach(btn => {
 // ---------------- DATA ----------------
 async function loadData() {
   document.getElementById('content').innerHTML = '<div class="loading-note">불러오는 중…</div>';
-  const [c, r, o] = await Promise.all([
+  const [c, r, o, cp, cc, ci] = await Promise.all([
     sb.from('contacts').select('*').order('created_at', { ascending:false }),
     sb.from('group_buy_rounds').select('*').order('start_date', { ascending:false }),
     sb.from('organic_content_mentions').select('*').order('mention_date', { ascending:false }),
+    sb.from('campaigns').select('*').order('created_at', { ascending:false }),
+    sb.from('campaign_collabs').select('*'),
+    sb.from('campaign_improvements').select('*'),
   ]);
   if (c.error) { toast('contacts 로드 실패: ' + c.error.message); }
   if (r.error) { toast('group_buy_rounds 로드 실패: ' + r.error.message); }
   if (o.error) { toast('organic_content_mentions 로드 실패: ' + o.error.message); }
+  if (cp.error) { toast('campaigns 로드 실패: ' + cp.error.message); }
   CONTACTS = c.data || [];
   ROUNDS = r.data || [];
   ORGANIC = o.data || [];
+  CAMPAIGNS = cp.data || [];
+  CAMPAIGN_COLLABS = cc.data || [];
+  CAMPAIGN_IMPROVEMENTS = ci.data || [];
   const today = new Date();
   ROUNDS.forEach(r => {
     r._start = r.start_date ? new Date(r.start_date) : null;
@@ -261,6 +272,7 @@ function render() {
   else if (activeTab === 'seeding') renderSeeding();
   else if (activeTab === 'revenue') renderRevenue();
   else if (activeTab === 'organic') renderOrganic();
+  else if (activeTab === 'campaigns') renderCampaigns();
 }
 
 // ---------------- OVERVIEW ----------------
@@ -667,6 +679,93 @@ async function deleteOrganic(id) {
   const res = await sb.from('organic_content_mentions').delete().eq('id', id);
   if (res.error) { toast('삭제 실패: ' + res.error.message); return; }
   toast('삭제했어요.'); await loadData();
+}
+
+
+// ---------------- CAMPAIGN REPORTS TAB (읽기 전용 - 구글시트에서 관리) ----------------
+let selectedCampaignRef = null;
+function renderCampaigns() {
+  if (!selectedCampaignRef && CAMPAIGNS.length) selectedCampaignRef = CAMPAIGNS[0].sheet_ref;
+  document.getElementById('content').innerHTML = `
+    <p class="muted" style="margin-top:-6px;">이 데이터는 구글시트에서 관리되며 자동동기화됩니다 (읽기 전용).</p>
+    <div class="controls">
+      <select id="fCampaign">${CAMPAIGNS.map(c=>`<option value="${esc(c.sheet_ref)}" ${selectedCampaignRef===c.sheet_ref?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+      <button class="btn ghost" id="refreshBtn4">🔄 새로고침</button>
+    </div>
+    <div id="campaignDetail"></div>
+  `;
+  document.getElementById('fCampaign').onchange = e => { selectedCampaignRef = e.target.value; renderCampaignDetail(); };
+  document.getElementById('refreshBtn4').onclick = loadData;
+  renderCampaignDetail();
+}
+function renderCampaignDetail() {
+  const c = CAMPAIGNS.find(x=>x.sheet_ref===selectedCampaignRef);
+  const box = document.getElementById('campaignDetail');
+  if (!c) { box.innerHTML = '<p class="muted">캠페인이 없습니다.</p>'; return; }
+  const collabs = CAMPAIGN_COLLABS.filter(x=>x.campaign_sheet_ref===c.sheet_ref).sort((a,b)=>Number(a.no)-Number(b.no));
+  const improvements = CAMPAIGN_IMPROVEMENTS.filter(x=>x.campaign_sheet_ref===c.sheet_ref).sort((a,b)=>Number(a.no)-Number(b.no));
+  const kpis = [
+    {label:'목표 VIEW', value: c.target_view!=null ? Number(c.target_view).toLocaleString('ko-KR') : '-'},
+    {label:'도달 VIEW', value: c.reached_view!=null ? Number(c.reached_view).toLocaleString('ko-KR') : '-'},
+    {label:'달성률', value: c.achievement_rate || '-'},
+    {label:'총 매출', value: won(c.total_revenue)},
+    {label:'업로드 효과', value: c.upload_effect || '-'},
+  ];
+  box.innerHTML = `
+    <div class="panel" style="margin-top:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;">
+        <div><strong>${esc(c.name)}</strong> <span class="muted">· ${esc(c.date_range||'')}</span></div>
+        <div class="muted">담당자: ${esc(c.assignee)||'-'}</div>
+      </div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr); margin-bottom:0;">
+        ${kpis.map(k=>`<div class="kpi-card"><div class="label">${k.label}</div><div class="value" style="font-size:16px;">${k.value}</div></div>`).join('')}
+      </div>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;font-size:14px;">협업 리스트 (${collabs.length}건)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>No</th><th>채널</th><th>계정명</th><th>구분</th><th>노출제품</th><th>협업형태</th><th>업로드일</th><th>조회수</th><th>인게이지율</th><th>섭외상태</th><th>담당자 코멘트</th><th>링크</th></tr></thead>
+          <tbody>
+            ${collabs.map(x => `
+              <tr>
+                <td>${esc(x.no)}</td>
+                <td>${esc(x.channel)||'-'}</td>
+                <td>${esc(x.account_name)||'-'}</td>
+                <td>${esc(x.category)||'-'}</td>
+                <td class="muted" style="max-width:220px;">${esc(x.exposed_product)||'-'}</td>
+                <td>${esc(x.collab_type)||'-'}</td>
+                <td class="muted">${x.upload_date||'-'}</td>
+                <td class="num">${x.views!=null?Number(x.views).toLocaleString('ko-KR'):'-'}</td>
+                <td class="num">${esc(x.engagement_rate)||'-'}</td>
+                <td>${esc(x.recruit_status)||'-'}</td>
+                <td class="muted" style="max-width:260px;">${esc(x.manager_comment)||'-'}</td>
+                <td>${x.content_link?`<a href="${esc(x.content_link)}" target="_blank" rel="noopener">링크</a>`:'-'}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="12" class="muted">데이터가 없습니다.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0;font-size:14px;">보강 포인트 (${improvements.length}건)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>No</th><th>카테고리</th><th>보강 내용</th><th>근거</th></tr></thead>
+          <tbody>
+            ${improvements.map(x => `
+              <tr>
+                <td>${esc(x.no)}</td>
+                <td>${esc(x.category)||'-'}</td>
+                <td>${esc(x.improvement)||'-'}</td>
+                <td class="muted">${esc(x.evidence)||'-'}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="4" class="muted">데이터가 없습니다.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
