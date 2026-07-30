@@ -274,22 +274,40 @@ document.querySelectorAll('.nav button').forEach(btn => {
 });
 
 // ---------------- DATA ----------------
+// Supabase/PostgREST는 한 번에 최대 1000행(기본 max-rows 설정)까지만 반환하므로,
+// 데이터가 1000건을 넘는 테이블(예: 협업 컨택 리스트)에서도 안 잘리도록 페이지 단위로 끝까지 가져온다.
+async function fetchAllRows_(table, orderCol, ascending) {
+  const PAGE = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    let q = sb.from(table).select('*').range(from, from + PAGE - 1);
+    if (orderCol) q = q.order(orderCol, { ascending: !!ascending });
+    const res = await q;
+    if (res.error) return { data: all, error: res.error.message };
+    const page = res.data || [];
+    all = all.concat(page);
+    if (page.length < PAGE) break;
+    from += PAGE;
+  }
+  return { data: all, error: null };
+}
 async function loadData() {
   document.getElementById('content').innerHTML = '<div class="loading-note">불러오는 중…</div>';
   const [c, r, o, cp, cc, ci, cpr] = await Promise.all([
-    sb.from('contacts').select('*').order('created_at', { ascending:false }),
-    sb.from('group_buy_rounds').select('*').order('start_date', { ascending:false }),
-    sb.from('organic_content_mentions').select('*').order('mention_date', { ascending:false }),
-    sb.from('campaigns').select('*').order('created_at', { ascending:false }),
-    sb.from('campaign_collabs').select('*'),
-    sb.from('campaign_improvements').select('*'),
-    sb.from('collab_proposals').select('*'),
+    fetchAllRows_('contacts', 'created_at', false),
+    fetchAllRows_('group_buy_rounds', 'start_date', false),
+    fetchAllRows_('organic_content_mentions', 'mention_date', false),
+    fetchAllRows_('campaigns', 'created_at', false),
+    fetchAllRows_('campaign_collabs'),
+    fetchAllRows_('campaign_improvements'),
+    fetchAllRows_('collab_proposals'),
   ]);
-  if (c.error) { toast('contacts 로드 실패: ' + c.error.message); }
-  if (r.error) { toast('group_buy_rounds 로드 실패: ' + r.error.message); }
-  if (o.error) { toast('organic_content_mentions 로드 실패: ' + o.error.message); }
-  if (cp.error) { toast('campaigns 로드 실패: ' + cp.error.message); }
-  if (cpr.error) { toast('collab_proposals 로드 실패: ' + cpr.error.message); }
+  if (c.error) { toast('contacts 로드 실패: ' + c.error); }
+  if (r.error) { toast('group_buy_rounds 로드 실패: ' + r.error); }
+  if (o.error) { toast('organic_content_mentions 로드 실패: ' + o.error); }
+  if (cp.error) { toast('campaigns 로드 실패: ' + cp.error); }
+  if (cpr.error) { toast('collab_proposals 로드 실패: ' + cpr.error); }
   CONTACTS = c.data || [];
   ROUNDS = r.data || [];
   ORGANIC = o.data || [];
