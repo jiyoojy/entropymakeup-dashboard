@@ -634,7 +634,7 @@ function renderAgencyAnalysis() {
   renderProgressDetail(confirmedList);
 }
 let currentProgressList_ = [];
-function selectProgressContact(id) { selectedProgressContactId = id; renderProgressDetail(currentProgressList_); }
+function selectProgressContact(id) { selectedProgressContactId = id; const sel = document.getElementById('paSelect'); if (sel) sel.value = id; renderProgressDetail(currentProgressList_); }
 function renderProgressDetail(confirmedList) {
   currentProgressList_ = confirmedList;
   const box = document.getElementById('progressDetail');
