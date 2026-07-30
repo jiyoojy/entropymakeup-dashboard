@@ -633,7 +633,10 @@ function renderAgencyAnalysis() {
   document.getElementById('paSelect').onchange = e => { selectedProgressContactId = e.target.value; renderProgressDetail(confirmedList); };
   renderProgressDetail(confirmedList);
 }
+let currentProgressList_ = [];
+function selectProgressContact(id) { selectedProgressContactId = id; renderProgressDetail(currentProgressList_); }
 function renderProgressDetail(confirmedList) {
+  currentProgressList_ = confirmedList;
   const box = document.getElementById('progressDetail');
   const c = confirmedList.find(x=>x.id===selectedProgressContactId);
   if (!c) { box.innerHTML = '<p class="muted" style="margin-top:16px;">확정된 진행자가 없습니다.</p>'; return; }
@@ -709,7 +712,7 @@ function renderProgressDetail(confirmedList) {
   const allConfirmed = confirmedList.map(x => ({ ...x, _revenue: contactIdToRevenue[x.id] || 0 })).sort((a,b)=>b._revenue-a._revenue);
   const maxRevenue = Math.max(1, ...allConfirmed.map(x=>x._revenue));
   document.getElementById('allProgressRevenue').innerHTML = allConfirmed.map(x => `
-    <div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); font-size:12px; cursor:pointer;" onclick="selectedProgressContactId='${x.id}'; renderProgressDetail(${JSON.stringify(confirmedList).replace(/"/g,'&quot;')});">
+    <div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); font-size:12px; cursor:pointer;" onclick="selectProgressContact('${x.id}')">
       <span style="width:150px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; ${x.id===c.id?'font-weight:700;':''}">${esc(x.name)}${x.instagram?' @'+esc(x.instagram).replace(/^@/,''):''}</span>
       <span class="badge" style="background:var(--accent-soft); color:var(--accent-dark); flex-shrink:0;">${esc(x.brand)||'-'}</span>
       <div style="flex:1; background:var(--bg); border-radius:4px; height:8px; overflow:hidden;"><div style="width:${x._revenue/maxRevenue*100}%; background:var(--ok); height:100%;"></div></div>
