@@ -204,6 +204,7 @@ let CAMPAIGNS = [];
 let CAMPAIGN_COLLABS = [];
 let CAMPAIGN_IMPROVEMENTS = [];
 let COLLAB_PROPOSALS = [];
+let CALENDAR_EVENTS = [];
 let activeTab = 'overview';
 
 function toast(msg) {
@@ -294,7 +295,7 @@ async function fetchAllRows_(table, orderCol, ascending) {
 }
 async function loadData() {
   document.getElementById('content').innerHTML = '<div class="loading-note">불러오는 중…</div>';
-  const [c, r, o, cp, cc, ci, cpr] = await Promise.all([
+  const [c, r, o, cp, cc, ci, cpr, gc] = await Promise.all([
     fetchAllRows_('contacts', 'created_at', false),
     fetchAllRows_('group_buy_rounds', 'start_date', false),
     fetchAllRows_('organic_content_mentions', 'mention_date', false),
@@ -302,12 +303,14 @@ async function loadData() {
     fetchAllRows_('campaign_collabs'),
     fetchAllRows_('campaign_improvements'),
     fetchAllRows_('collab_proposals'),
+    fetchAllRows_('calendar_events', 'start_date', false),
   ]);
   if (c.error) { toast('contacts 로드 실패: ' + c.error); }
   if (r.error) { toast('group_buy_rounds 로드 실패: ' + r.error); }
   if (o.error) { toast('organic_content_mentions 로드 실패: ' + o.error); }
   if (cp.error) { toast('campaigns 로드 실패: ' + cp.error); }
   if (cpr.error) { toast('collab_proposals 로드 실패: ' + cpr.error); }
+  if (gc.error) { toast('calendar_events 로드 실패: ' + gc.error); }
   CONTACTS = c.data || [];
   ROUNDS = r.data || [];
   ORGANIC = o.data || [];
@@ -315,6 +318,7 @@ async function loadData() {
   CAMPAIGN_COLLABS = cc.data || [];
   CAMPAIGN_IMPROVEMENTS = ci.data || [];
   COLLAB_PROPOSALS = cpr.data || [];
+  CALENDAR_EVENTS = gc.data || [];
   const today = new Date();
   ROUNDS.forEach(r => {
     r._start = r.start_date ? new Date(r.start_date) : null;
@@ -781,14 +785,27 @@ function renderCalendar() {
       <strong id="calLabel" style="font-size:14px;"></strong>
       <button class="btn ghost" id="calNext">▶</button>
       <button class="btn ghost" id="calToday">오늘</button>
+      <span class="muted" style="margin-left:auto;">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:2px; background:var(--accent); margin-right:4px;"></span>공동구매 회차
+        <span style="display:inline-block; width:8px; height:8px; border-radius:2px; background:var(--info); margin:0 4px 0 12px;"></span>구글 캘린더 일정
+      </span>
     </div>
     <div class="panel"><div id="calGrid"></div></div>
-    <div class="panel">
-      <h3 style="margin-top:0;font-size:14px;">이번 달 진행 회차</h3>
-      <div class="table-wrap"><table>
-        <thead><tr><th>시작일</th><th>종료일</th><th>진행자</th><th>제품</th><th>매출</th></tr></thead>
-        <tbody id="calList"></tbody>
-      </table></div>
+    <div class="grid-2">
+      <div class="panel">
+        <h3 style="margin-top:0;font-size:14px;">이번 달 진행 회차</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>시작일</th><th>종료일</th><th>진행자</th><th>제품</th><th>매출</th></tr></thead>
+          <tbody id="calList"></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0;font-size:14px;">이번 달 구글 캘린더 일정</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>시작일</th><th>종료일</th><th>제목</th><th>설명</th></tr></thead>
+          <tbody id="calGcalList"></tbody>
+        </table></div>
+      </div>
     </div>
   `;
   document.getElementById('calPrev').onclick = () => { calMonth.setMonth(calMonth.getMonth()-1); renderCalendarBody(); };
@@ -803,18 +820,29 @@ function renderCalendarBody() {
   const startOffset = firstDay.getDay();
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const byDate = {};
-  ROUNDS.forEach(r => {
-    if (!r.start_date) return;
-    if (!byDate[r.start_date]) byDate[r.start_date] = [];
-    byDate[r.start_date].push(r);
-  });
+  const addRange = (startStr, endStr, item) => {
+    if (!startStr) return;
+    let d = new Date(startStr + 'T00:00:00');
+    const end = new Date((endStr || startStr) + 'T00:00:00');
+    let guard = 0;
+    while (d <= end && guard < 60) {
+      const key = d.toISOString().slice(0,10);
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(item);
+      d.setDate(d.getDate() + 1);
+      guard++;
+    }
+  };
+  ROUNDS.forEach(r => { if (r.start_date) addRange(r.start_date, r.end_date, { type:'round', label: r.agency }); });
+  CALENDAR_EVENTS.forEach(e => { if (e.start_date) addRange(e.start_date, e.end_date, { type:'gcal', label: e.title }); });
+
   let cells = '';
   ['일','월','화','수','목','금','토'].forEach(d => cells += `<div class="cal-head">${d}</div>`);
   for (let i=0; i<startOffset; i++) cells += `<div class="cal-cell empty"></div>`;
   for (let d=1; d<=daysInMonth; d++) {
     const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const items = byDate[dateStr] || [];
-    cells += `<div class="cal-cell"><div class="cal-daynum">${d}</div>${items.slice(0,2).map(r=>`<div class="cal-item">${esc(r.agency)}</div>`).join('')}${items.length>2?`<div class="cal-more">+${items.length-2}</div>`:''}</div>`;
+    cells += `<div class="cal-cell"><div class="cal-daynum">${d}</div>${items.slice(0,3).map(it=>`<div class="cal-item" style="${it.type==='gcal'?'background:#e3ebf3; color:var(--info);':''}">${esc(it.label)}</div>`).join('')}${items.length>3?`<div class="cal-more">+${items.length-3}</div>`:''}</div>`;
   }
   document.getElementById('calGrid').innerHTML = `<div class="cal-grid">${cells}</div>`;
 
@@ -823,6 +851,12 @@ function renderCalendarBody() {
   document.getElementById('calList').innerHTML = monthRounds.map(r => `
     <tr><td>${r.start_date||'-'}</td><td>${r.end_date||'-'}</td><td>${esc(r.agency)}</td><td>${esc(r.product)||'-'}</td><td class="num">${won(r.revenue)}</td></tr>
   `).join('') || '<tr><td colspan="5" class="muted">이번 달 진행 회차가 없습니다.</td></tr>';
+
+  const monthEvents = CALENDAR_EVENTS.filter(e => e.start_date && e.start_date.slice(0,7) === `${y}-${String(m+1).padStart(2,'0')}`)
+    .sort((a,b) => (a.start_date||'') < (b.start_date||'') ? -1 : 1);
+  document.getElementById('calGcalList').innerHTML = monthEvents.map(e => `
+    <tr><td>${e.start_date||'-'}</td><td>${e.end_date||'-'}</td><td>${esc(e.title)}</td><td class="muted" style="max-width:220px;">${esc(e.description)||'-'}</td></tr>
+  `).join('') || '<tr><td colspan="4" class="muted">이번 달 구글 캘린더 일정이 없습니다.</td></tr>';
 }
 
 // ---------------- 담당자 KPI ----------------
@@ -884,6 +918,7 @@ const RAW_TABLES = {
   campaign_collabs: { label: '캠페인 협업 리스트 (campaign_collabs)', data: () => CAMPAIGN_COLLABS },
   campaign_improvements: { label: '캠페인 보강 포인트 (campaign_improvements)', data: () => CAMPAIGN_IMPROVEMENTS },
   collab_proposals: { label: '협업 컨택 리스트 (collab_proposals)', data: () => COLLAB_PROPOSALS },
+  calendar_events: { label: '구글 캘린더 일정 (calendar_events)', data: () => CALENDAR_EVENTS },
 };
 let rawTable = 'contacts';
 function renderRaw() {
