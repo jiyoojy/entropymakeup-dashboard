@@ -801,9 +801,10 @@ function renderCalendar() {
     <div class="panel"><div id="calGrid"></div></div>
     <div class="grid-2">
       <div class="panel">
-        <h3 style="margin-top:0;font-size:14px;">이번 달 진행 회차</h3>
+        <h3 style="margin-top:0;font-size:14px;">지금 진행중인 마켓 일정</h3>
+        <p class="muted" style="margin:-4px 0 10px;font-size:11.5px;">오늘 날짜 기준 구글 캘린더상 진행중인 일정이에요.</p>
         <div class="table-wrap"><table>
-          <thead><tr><th>시작일</th><th>종료일</th><th>진행자</th><th>제품</th><th>매출</th></tr></thead>
+          <thead><tr><th>제목</th><th>시작일</th><th>종료일</th><th>남은 일수</th></tr></thead>
           <tbody id="calList"></tbody>
         </table></div>
       </div>
@@ -892,11 +893,15 @@ function renderCalendarBody() {
   ['일','월','화','수','목','금','토'].forEach(d => headHtml += `<div class="cal-head">${d}</div>`);
   document.getElementById('calGrid').innerHTML = `<div class="cal-grid-wrap"><div class="cal-headrow">${headHtml}</div>${weekHtml}</div>`;
 
-  const monthRounds = ROUNDS.filter(r => r.start_date && r.start_date.slice(0,7) === `${y}-${String(m+1).padStart(2,'0')}`)
-    .sort((a,b) => (a.start_date||'') < (b.start_date||'') ? -1 : 1);
-  document.getElementById('calList').innerHTML = monthRounds.map(r => `
-    <tr><td>${r.start_date||'-'}</td><td>${r.end_date||'-'}</td><td>${esc(r.agency)}</td><td>${esc(r.product)||'-'}</td><td class="num">${won(r.revenue)}</td></tr>
-  `).join('') || '<tr><td colspan="5" class="muted">이번 달 진행 회차가 없습니다.</td></tr>';
+  const todayStr = toKey(new Date());
+  const activeEvents = CALENDAR_EVENTS.filter(e => e.start_date && e.start_date <= todayStr && (e.end_date || e.start_date) >= todayStr)
+    .sort((a,b) => ((a.end_date||a.start_date)) < ((b.end_date||b.start_date)) ? -1 : 1);
+  document.getElementById('calList').innerHTML = activeEvents.map(e => {
+    const end = new Date((e.end_date || e.start_date) + 'T00:00:00');
+    const today0 = new Date(todayStr + 'T00:00:00');
+    const dday = Math.round((end - today0) / 86400000);
+    return `<tr><td>${esc(e.title)}</td><td>${e.start_date||'-'}</td><td>${e.end_date||'-'}</td><td class="num">${dday <= 0 ? '오늘 종료' : 'D-'+dday}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="muted">오늘 진행중인 마켓 일정이 없습니다.</td></tr>';
 
   const monthEvents = CALENDAR_EVENTS.filter(e => e.start_date && e.start_date.slice(0,7) === `${y}-${String(m+1).padStart(2,'0')}`)
     .sort((a,b) => (a.start_date||'') < (b.start_date||'') ? -1 : 1);
