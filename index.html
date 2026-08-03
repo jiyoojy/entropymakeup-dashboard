@@ -826,7 +826,7 @@ function renderCalendarBody() {
     const end = new Date((endStr || startStr) + 'T00:00:00');
     let guard = 0;
     while (d <= end && guard < 60) {
-      const key = d.toISOString().slice(0,10);
+      const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
       if (!byDate[key]) byDate[key] = [];
       byDate[key].push(item);
       d.setDate(d.getDate() + 1);
