@@ -43,13 +43,21 @@
   .nav button.soon { color:var(--sub); }
   .soon-page { padding:40px 20px; text-align:center; color:var(--sub); }
   .soon-page .icon { font-size:34px; margin-bottom:10px; }
-  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
-  .cal-head { text-align:center; font-size:11px; color:var(--sub); font-weight:600; padding:4px 0; }
-  .cal-cell { min-height:64px; border:1px solid var(--line); border-radius:6px; padding:4px; font-size:11px; }
-  .cal-cell.empty { border:none; }
-  .cal-daynum { font-size:11px; color:var(--sub); margin-bottom:2px; }
-  .cal-item { background:var(--accent-soft); color:var(--accent-dark); border-radius:4px; padding:1px 4px; margin-bottom:2px; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .cal-more { font-size:10px; color:var(--sub); }
+  .cal-grid-wrap { border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff; }
+  .cal-headrow { display:grid; grid-template-columns:repeat(7,1fr); border-bottom:1px solid var(--line); }
+  .cal-head { text-align:center; font-size:11px; color:var(--sub); font-weight:600; padding:8px 0; }
+  .cal-week { display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:22px 18px 18px 18px 13px; position:relative; border-bottom:1px solid var(--line); }
+  .cal-week:last-child { border-bottom:none; }
+  .cal-colbg { grid-row:1/-1; border-right:1px solid var(--line); }
+  .cal-colbg:last-child { border-right:none; }
+  .cal-daynum-cell { grid-row:1; padding:3px 6px 0; font-size:11px; color:var(--ink); }
+  .cal-daynum-cell.other-month { color:var(--sub); opacity:.45; }
+  .cal-daynum-cell .num { display:inline-block; min-width:18px; height:18px; line-height:18px; text-align:center; border-radius:50%; }
+  .cal-daynum-cell.today .num { background:var(--accent-dark); color:#fff; font-weight:700; }
+  .cal-bar { margin:1px 2px 0; padding:0 6px; border-radius:4px; font-size:10.5px; font-weight:600; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#fff; cursor:default; }
+  .cal-bar.round { background:var(--accent); }
+  .cal-bar.gcal { background:var(--info); }
+  .cal-overflow { grid-row:5; font-size:9.5px; color:var(--sub); padding:0 6px; }
   .sidebar .userbox { padding:14px 18px; border-top:1px solid var(--line); font-size:11.5px; color:var(--sub); }
   .sidebar .userbox a { color:var(--accent-dark); cursor:pointer; text-decoration:underline; }
 
@@ -816,35 +824,73 @@ function renderCalendar() {
 function renderCalendarBody() {
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
   document.getElementById('calLabel').textContent = `${y}년 ${m+1}월`;
-  const firstDay = new Date(y, m, 1);
-  const startOffset = firstDay.getDay();
-  const daysInMonth = new Date(y, m+1, 0).getDate();
-  const byDate = {};
-  const addRange = (startStr, endStr, item) => {
-    if (!startStr) return;
-    let d = new Date(startStr + 'T00:00:00');
-    const end = new Date((endStr || startStr) + 'T00:00:00');
-    let guard = 0;
-    while (d <= end && guard < 60) {
-      const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      if (!byDate[key]) byDate[key] = [];
-      byDate[key].push(item);
-      d.setDate(d.getDate() + 1);
-      guard++;
-    }
-  };
-  ROUNDS.forEach(r => { if (r.start_date) addRange(r.start_date, r.end_date, { type:'round', label: r.agency }); });
-  CALENDAR_EVENTS.forEach(e => { if (e.start_date) addRange(e.start_date, e.end_date, { type:'gcal', label: e.title }); });
+  const toKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 
-  let cells = '';
-  ['일','월','화','수','목','금','토'].forEach(d => cells += `<div class="cal-head">${d}</div>`);
-  for (let i=0; i<startOffset; i++) cells += `<div class="cal-cell empty"></div>`;
-  for (let d=1; d<=daysInMonth; d++) {
-    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const items = byDate[dateStr] || [];
-    cells += `<div class="cal-cell"><div class="cal-daynum">${d}</div>${items.slice(0,3).map(it=>`<div class="cal-item" style="${it.type==='gcal'?'background:#e3ebf3; color:var(--info);':''}">${esc(it.label)}</div>`).join('')}${items.length>3?`<div class="cal-more">+${items.length-3}</div>`:''}</div>`;
+  const firstOfMonth = new Date(y, m, 1);
+  const startOffset = firstOfMonth.getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+  const gridStart = new Date(y, m, 1 - startOffset);
+  const todayKey = toKey(new Date());
+
+  const weeks = [];
+  for (let w = 0; w < totalCells / 7; w++) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const dt = new Date(gridStart);
+      dt.setDate(gridStart.getDate() + w*7 + d);
+      week.push(dt);
+    }
+    weeks.push(week);
   }
-  document.getElementById('calGrid').innerHTML = `<div class="cal-grid">${cells}</div>`;
+
+  // 회차/캘린더 일정을 하루 단위로 쪼개지 않고 (시작~종료) 구간 그대로 유지해서
+  // 구글 캘린더처럼 여러 날에 걸친 막대 하나로 표시한다.
+  const spans = [];
+  ROUNDS.forEach(r => { if (r.start_date) spans.push({ start: r.start_date, end: r.end_date || r.start_date, label: r.agency, type: 'round' }); });
+  CALENDAR_EVENTS.forEach(e => { if (e.start_date) spans.push({ start: e.start_date, end: e.end_date || e.start_date, label: e.title, type: 'gcal' }); });
+
+  const MAX_LANES = 3;
+  let weekHtml = '';
+  weeks.forEach(week => {
+    const weekStartKey = toKey(week[0]), weekEndKey = toKey(week[6]);
+    const weekSpans = spans.filter(s => s.start <= weekEndKey && s.end >= weekStartKey)
+      .sort((a,b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : (b.end > a.end ? 1 : -1)));
+    const laneEndCol = [];
+    const overflow = {};
+    let barsHtml = '';
+    weekSpans.forEach(s => {
+      let startCol = week.findIndex(dt => toKey(dt) >= s.start);
+      if (startCol === -1) startCol = 0;
+      let endCol = 6;
+      for (let c = 0; c < 7; c++) { if (toKey(week[c]) <= s.end) endCol = c; }
+      if (endCol < startCol) endCol = startCol;
+      let lane = 0;
+      while (lane < laneEndCol.length && laneEndCol[lane] >= startCol) lane++;
+      if (lane >= MAX_LANES) {
+        for (let c = startCol; c <= endCol; c++) overflow[c] = (overflow[c]||0) + 1;
+        return;
+      }
+      laneEndCol[lane] = endCol;
+      barsHtml += `<div class="cal-bar ${s.type}" style="grid-row:${lane+2}; grid-column:${startCol+1} / ${endCol+2};" title="${esc(s.label)}">${esc(s.label)}</div>`;
+    });
+    let overflowHtml = '';
+    Object.keys(overflow).forEach(c => {
+      overflowHtml += `<div class="cal-overflow" style="grid-column:${Number(c)+1};">+${overflow[c]}건</div>`;
+    });
+    let dayCellsHtml = '', colBgHtml = '';
+    week.forEach((dt, i) => {
+      const inMonth = dt.getMonth() === m;
+      const isToday = toKey(dt) === todayKey;
+      dayCellsHtml += `<div class="cal-daynum-cell ${inMonth?'':'other-month'} ${isToday?'today':''}" style="grid-column:${i+1};"><span class="num">${dt.getDate()}</span></div>`;
+      colBgHtml += `<div class="cal-colbg" style="grid-column:${i+1};"></div>`;
+    });
+    weekHtml += `<div class="cal-week">${colBgHtml}${dayCellsHtml}${barsHtml}${overflowHtml}</div>`;
+  });
+
+  let headHtml = '';
+  ['일','월','화','수','목','금','토'].forEach(d => headHtml += `<div class="cal-head">${d}</div>`);
+  document.getElementById('calGrid').innerHTML = `<div class="cal-grid-wrap"><div class="cal-headrow">${headHtml}</div>${weekHtml}</div>`;
 
   const monthRounds = ROUNDS.filter(r => r.start_date && r.start_date.slice(0,7) === `${y}-${String(m+1).padStart(2,'0')}`)
     .sort((a,b) => (a.start_date||'') < (b.start_date||'') ? -1 : 1);
