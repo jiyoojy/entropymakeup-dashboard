@@ -1061,6 +1061,14 @@ function renderSeedTable() {
     }
     return true;
   });
+  rows = rows.slice().sort((a,b) => {
+    const ad = a.last_contact_date || '';
+    const bd = b.last_contact_date || '';
+    if (!ad && !bd) return 0;
+    if (!ad) return 1;
+    if (!bd) return -1;
+    return bd.localeCompare(ad);
+  });
   document.getElementById('seedTbody').innerHTML = rows.map(c => `
     <tr>
       <td>${esc(c.name)}</td>
@@ -1094,7 +1102,13 @@ function openContactModal(id) {
     </div>
     <div class="field-row">
       <div class="field"><label>최초컨택</label><input id="m_initial" value="${esc(c.initial_contact)}"></div>
-      <div class="field"><label>현재담당</label><input id="m_assignee" value="${esc(c.assignee)}"></div>
+      <div class="field"><label>현재담당</label>
+        <select id="m_assignee">
+          <option value="">미지정</option>
+          ${[...new Set(CONTACTS.map(x=>x.assignee).filter(Boolean))].sort().map(a=>`<option ${c.assignee===a?'selected':''}>${esc(a)}</option>`).join('')}
+          ${c.assignee && ![...new Set(CONTACTS.map(x=>x.assignee).filter(Boolean))].includes(c.assignee) ? `<option selected>${esc(c.assignee)}</option>` : ''}
+        </select>
+      </div>
     </div>
     <div class="field-row">
       <div class="field"><label>상태</label>
@@ -1131,7 +1145,7 @@ async function saveContact(id) {
     brand: document.getElementById('m_brand').value.trim() || null,
     category: document.getElementById('m_category').value.trim() || null,
     initial_contact: document.getElementById('m_initial').value.trim() || null,
-    assignee: document.getElementById('m_assignee').value.trim() || null,
+    assignee: document.getElementById('m_assignee').value || null,
     status: document.getElementById('m_status').value,
     collab_track: document.getElementById('m_track').value.trim() || null,
     last_contact_date: document.getElementById('m_lastcontact').value || null,
