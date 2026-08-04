@@ -1033,7 +1033,7 @@ function renderSeeding() {
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>이름</th><th>브랜드</th><th>카테고리</th><th>현재담당</th><th>협업트랙</th><th>상태</th><th>실매출</th><th>최근컨택 · 메모</th><th></th></tr></thead>
+          <thead><tr><th>이름</th><th>브랜드</th><th>카테고리</th><th>현재담당</th><th>협업트랙</th><th>상태</th><th>실매출</th><th>최근컨택일</th><th>메모</th><th></th></tr></thead>
           <tbody id="seedTbody"></tbody>
         </table>
       </div>
@@ -1070,13 +1070,14 @@ function renderSeedTable() {
       <td>${esc(c.collab_track)||'-'}</td>
       <td><span class="badge ${statusBadgeClass(c.status)}">${esc(c.status)||'-'}</span></td>
       <td class="num">${c.actual_revenue!=null ? won(c.actual_revenue) : '-'}</td>
-      <td class="muted">${esc([c.last_contact_date, c.note].filter(Boolean).join(' · '))||'-'}</td>
+      <td class="muted" style="white-space:nowrap;">${esc(c.last_contact_date)||'-'}</td>
+      <td class="muted" style="max-width:260px;">${esc(c.note)||'-'}</td>
       <td class="row-actions">
         <button class="btn small" onclick="openContactModal('${c.id}')">수정</button>
         <button class="btn small" onclick="deleteContact('${c.id}')">삭제</button>
       </td>
     </tr>
-  `).join('') || '<tr><td colspan="9" class="muted">조건에 맞는 데이터가 없습니다.</td></tr>';
+  `).join('') || '<tr><td colspan="10" class="muted">조건에 맞는 데이터가 없습니다.</td></tr>';
 }
 
 function openContactModal(id) {
